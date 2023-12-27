@@ -17,8 +17,28 @@
   - [Erklärung Artefakt](#erkläHz2)
   - [Beurteilung Erreichungsgrad](#beurtHz2)
 - [Handlungsziel 3](#hz3)
+  - [Artefakt | Anleitung zum Erstellen von Authentifizierung und Autorisierung mit JWT ](#artefaktHz3)
+    - [Schritt 1 | NuGet-Paket installieren](#artefaktHz3.1)
+    - [Schritt 2 | Konfiguration von JWT in Programm.cs](#artefaktHz3.2)
+    - [Schritt 3 | Anpassung Login-Controller](#artefaktHz3.3)
+    - [Schritt 4 | API Methode anpassen](#artefaktHz3.4)
+  - [Wie wurde das HZ erreicht](#erreiHz3)
+  - [Erklärung Artefakt](#erkläHz3)
+  - [Beurteilung Erreichungsgrad](#beurtHz3)
 - [Handlungsziel 4](#hz4)
+  - [Artefakt | Anleitung zum Erstellen von Authentifizierung und Autorisierung mit JWT ](#artefaktHz4)
+    - [Berücksichtigung während des Entwurfs](#artefaktHz4Entwurf)
+    - [Berücksichtigung während der Implementierung](#artefaktHz4Implementierung)
+    - [Berücksichtigung während der Inbetriebnahme](#artefaktHz4Inbetriebnahme)
+  - [Wie wurde das HZ erreicht](#erreiHz4)
+  - [Erklärung Artefakt](#erkläHz4)
+  - [Beurteilung Erreichungsgrad](#beurtHz4)
 - [Handlungsziel 5](#hz5)
+  - [Artefakt |  ](#artefaktHz5)
+  - [Wie wurde das HZ erreicht](#erreiHz5)
+  - [Erklärung Artefakt](#erkläHz5)
+  - [Beurteilung Erreichungsgrad](#beurtHz5)
+- [Selbsteinschätzung Modul](#selbsteinschätzungModul)
 
 <a id="einleitung"></a>
 
@@ -254,15 +274,15 @@ string sql = "SELECT * FROM Users WHERE username = {0} AND password = {1}";
 User? user = _context.Users.FromSqlRaw(sql, request.Username, MD5Helper.ComputeMD5Hash(request.Password)).FirstOrDefault();
 
 ```
-Auf der ersten Zeile, in der SQL-Abfrage, werden daher `username` und `password` mit `{0}` bzw. `{1}` definiert, ohne die richtig Benutzerdaten einzufügen.
-In der folgenden Datenbank anfrage werden dabei der eingegeben Username und das eingeben Passwort als Parameter sepparat mitgegben, wodurch die Datenbank weiss, dass diese nur Daten und kein Code sind. 
 
+Auf der ersten Zeile, in der SQL-Abfrage, werden daher `username` und `password` mit `{0}` bzw. `{1}` definiert, ohne die richtig Benutzerdaten einzufügen.
+In der folgenden Datenbank anfrage werden dabei der eingegeben Username und das eingeben Passwort als Parameter sepparat mitgegben, wodurch die Datenbank weiss, dass diese nur Daten und kein Code sind.
 
 <a id="beurtHz2"></a>
 
 ## Beurteilung Erreichungsgrad
 
-Das Handlungsziel 2 würde ich als vollständig erreicht betrachten, ich habe eine Sicherheitslücke gefunden, den Lösungsvorschlag vom HZ1 auf so ein Problem genommen und diesen erfolgreich implementiert. Es ist hinzuzufügen, dass ich jedoch nicht alle Sicherheitsrisiken im Code geschlossen habe. So wird beispielsweise als Hash-Algorithmus, für die Passwörter, MD5 verwendent, welcher als nicht mehr sicher gilt und daher ein Sicherheitsrisiko (Cryptographic Failure) darstellt. Einen möglichen Lösungsansatz diesen zu schliessen wäre, in der Applikation einen sicheren Algorithmus wie Argon2 oder Bcrypt zu verwenden. 
+Das Handlungsziel 2 würde ich als vollständig erreicht betrachten, ich habe eine Sicherheitslücke gefunden, den Lösungsvorschlag vom HZ1 auf so ein Problem genommen und diesen erfolgreich implementiert. Es ist hinzuzufügen, dass ich jedoch nicht alle Sicherheitsrisiken im Code geschlossen habe. So wird beispielsweise als Hash-Algorithmus, für die Passwörter, MD5 verwendent, welcher als nicht mehr sicher gilt und daher ein Sicherheitsrisiko (Cryptographic Failure) darstellt. Einen möglichen Lösungsansatz diesen zu schliessen wäre, in der Applikation einen sicheren Algorithmus wie Argon2 oder Bcrypt zu verwenden.
 
 <a id="hz3"></a>
 
@@ -270,25 +290,455 @@ Das Handlungsziel 2 würde ich als vollständig erreicht betrachten, ich habe ei
 
 <a id="artefaktHz3"></a>
 
-## Artefakt | Code vor und nach Implementierung der Massnahme
+## Artefakt | Anleitung zum Erstellen von Authentifizierung und Autorisierung mit JWT
+
+<a id="artefaktHz3.1"></a>
+
+### Schritt 1 | NuGet-Paket installieren
+
+NuGet-Packet `Microsoft.AspNetCore.Authentication.JwtBearer` in der eigenen Anwendung installieren:
+
+![NuGet-Paket installation](images/NuGet_Installation.png)
+
+<a id="artefaktHz3.2"></a>
+
+### Schritt 2 | Konfiguration von JWT in Programm.cs
+
+In der Programm.cs Datei muss das JWT-Paket wie folgt konfiguriert werden:
+
+```csharp
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(o =>
+{
+    o.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(builder.Configuration["Jwt:Key"]!)),
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true
+    };
+});
+
+builder.Services.AddAuthorization();
+
+```
+
+Dabei ist es **_wichtig_** folgende Punkte zu beachten:
+
+- **Using** <br>
+  Am Anfang der Datei muss man folgenden beide Using-Anweisungen hinzufügen: <br>
+  `using Microsoft.AspNetCore.Authentication.JwtBearer;` & `using Microsoft.IdentityModel.Tokens;`
+
+- **Platzierung des Code** <br>
+  Beim oberhalb gezeigten Code ist es wichtig, diesen vor dem Befehl `var app = builder.Build();` zu platzieren, da der JWT sonst nicht in der App berücksichtig wird und es zu Fehlern kommen kann.
+
+Nach der Konfiguration sollte die Program.cs ungefähr wie folgt aussehen:
+
+```csharp
+
+using M183.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+
+
+var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddDbContext<NewsAppContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("SongContext")));
+
+builder.Services.AddControllers();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(c =>
+{
+    c.SwaggerDoc("v1", new OpenApiInfo { Title = "SwaggerAnnotation", Version = "v1" });
+    c.IncludeXmlComments(Path.Combine(System.AppContext.BaseDirectory, "SwaggerAnnotation.xml"));
+});
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
+}).AddJwtBearer(o =>
+{
+    o.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidIssuer = builder.Configuration["Jwt:Issuer"],
+        ValidAudience = builder.Configuration["Jwt:Audience"],
+        IssuerSigningKey = new SymmetricSecurityKey(Convert.FromBase64String(builder.Configuration["Jwt:Key"]!)),
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true
+    };
+});
+
+builder.Services.AddAuthorization();
+
+var app = builder.Build();
+
+// Configure the HTTP request pipeline.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
+app.UseHttpsRedirection();
+app.UseStaticFiles();
+
+app.UseAuthorization();
+
+app.MapControllers();
+
+app.Run();
+
+
+```
+
+<a id="artefaktHz3.3"></a>
+
+### Schritt 3 | Anpassung Login-Controller
+
+In diesem Schritt wird der Login Controller so angepasst, dass bei einer erfolgreichen Anmeldung der Client einen JWT-Token vom Server erhält. Diese Anpassung lässt sich in 4 Unterschritte aufteilen.
+
+#### 3.1 | Using-Anweisungen hinzufügen
+
+Wie schon im Programm.cs muss man auch in dieser Datei wieder zwei Using-Anweisungen hinzufügen, dieses Mal die folgenden: <br>
+`using System.IdentityModel.Tokens.Jwt;` & `using System.Security.Claims;`
+
+#### 3.2 | Konstruktor anpassen
+
+Im zweiten Schritt müssen wir ein neues privates Feld erstellen und dieses über den Konstruktor mit einem IConfiguration befüllen. <br>
+
+Code **vor** der Konstruktor Änderung:
+
+```csharp
+
+private readonly NewsAppContext _context;
+
+public LoginController(NewsAppContext context)
+{
+    _context = context;
+}
+
+```
+
+Code **nach** der Konstruktor Änderung:
+
+```csharp
+
+private readonly NewsAppContext _context;
+private readonly IConfiguration _configuration;
+
+public LoginController(NewsAppContext context, IConfiguration configuration)
+{
+    _context = context;
+    _configuration = configuration;
+}
+
+```
+
+#### 3.3 | Methode zum Erstellen von JWT implementieren
+
+Bevor wir im letzten Schritt die Login-Methode so umschreiben könne, dass diese JWT-Tokens zurückgeben kann, müssen wir zunächst eine Methode implementieren, welche JWT-Tokens erstellen kann. <br>
+
+Im folgenden der Code, der beschriebenen Methode:
+
+```csharp
+
+private string CreateToken(User user)
+{
+  tring issuer = _configuration.GetSection("Jwt:Issuer").Value!;
+  string audience = _configuration.GetSection("Jwt:Audience").Value!;
+
+  List<Claim> claims = new List<Claim> {
+    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+    new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString()),
+    new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
+    new Claim(ClaimTypes.Role,  (user.IsAdmin ? "admin" : "user"))
+  };
+
+  string base64Key = _configuration.GetSection("Jwt:Key").Value!;
+  SymmetricSecurityKey securityKey = new SymmetricSecurityKey(Convert.FromBase64String(base64Key));
+
+  SigningCredentials credentials = new SigningCredentials(
+  securityKey,
+  SecurityAlgorithms.HmacSha512Signature);
+
+  JwtSecurityToken token = new JwtSecurityToken(
+    issuer: issuer,
+    audience: audience,
+    claims: claims,
+    notBefore: DateTime.Now,
+    expires: DateTime.Now.AddDays(1),
+    signingCredentials: credentials
+  );
+
+  return new JwtSecurityTokenHandler().WriteToken(token);
+}
+
+```
+
+Im ersten Teil der Methode werden zunächst die Claims (im JWT enthaltenen Informationen), sowie andere Einstellungen, wie der zu verwendende Algorithmus und dazugehörige Key, definiert und im zweiten Teil aufgrund dieser Informationen ein Token erstellt.
+
+#### 3.4 | Ändern des Rückgabewerts der Login-Methode
+
+Als letzten Schritt, in diesem Teil, können wir nun noch den Rückgabewert der Login-Methode abändern: <br>
+
+Alter Rückgabewert: `return Ok(user);` <br>
+
+Neuer Rückgabewert: `return Ok(CreateToken(user));`
+
+#### Schritt 3 | Wrap-up
+
+Nachdem wir nun die Login-Controller Datei überarbeitet haben sollte sie wie folgt ausehen:
+
+```csharp
+
+using M183.Controllers.Dto;
+using M183.Controllers.Helper;
+using M183.Data;
+using M183.Models;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+
+namespace M183.Controllers
+{
+  [Route("api/[controller]")]
+  [ApiController]
+  public class LoginController : ControllerBase
+  {
+    private readonly NewsAppContext _context;
+    private readonly IConfiguration _configuration;
+
+    public LoginController(NewsAppContext context, IConfiguration configuration)
+    {
+      _context = context;
+      _configuration = configuration;
+    }
+
+    /// <summary>
+    /// Login a user using password and username
+    /// </summary>
+    /// <response code="200">Login successfull</response>
+    /// <response code="400">Bad request</response>
+    /// <response code="401">Login failed</response>
+    [HttpPost]
+    [ProducesResponseType(200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(401)]
+    public ActionResult<User> Login(LoginDto request)
+    {
+      if (request == null || request.Username.IsNullOrEmpty() || request.Password.IsNullOrEmpty())
+      {
+        return BadRequest();
+      }
+
+      string sql = "SELECT * FROM Users WHERE username = {0} AND password = {1}";
+      User? user = _context.Users.FromSqlRaw(sql, request.Username, MD5Helper.ComputeMD5Hash(request.Password)).FirstOrDefault();
+
+      if (user == null)
+      {
+        return Unauthorized("login failed");
+      }
+      return Ok(CreateToken(user));
+    }
+
+    private string CreateToken(User user)
+    {
+      string issuer = _configuration.GetSection("Jwt:Issuer").Value!;
+      string audience = _configuration.GetSection("Jwt:Audience").Value!;
+
+      List<Claim> claims = new List<Claim> {
+        new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+        new Claim(JwtRegisteredClaimNames.NameId, user.Id.ToString()),
+        new Claim(JwtRegisteredClaimNames.UniqueName, user.Username),
+        new Claim(ClaimTypes.Role,  (user.IsAdmin ? "admin" : "user"))
+      };
+
+      string base64Key = _configuration.GetSection("Jwt:Key").Value!;
+      SymmetricSecurityKey securityKey = new SymmetricSecurityKey(Convert.FromBase64String(base64Key));
+
+      SigningCredentials credentials = new SigningCredentials(
+        securityKey,
+        SecurityAlgorithms.HmacSha512Signature
+      );
+
+      JwtSecurityToken token = new JwtSecurityToken(
+        issuer: issuer,
+        audience: audience,
+        claims: claims,
+        notBefore: DateTime.Now,
+        expires: DateTime.Now.AddDays(1),
+        signingCredentials: credentials
+      );
+
+      return new JwtSecurityTokenHandler().WriteToken(token);
+    }
+  }
+}
+
+```
+
+<a id="artefaktHz3.4"></a>
+
+### Schritt 4 | API Methode anpassen
+
+Im letzten Schritt passen wir eine API-Delete Methode so an, dass diese Authentifizierung und Autorisierung durchführt und nur wenn beide erfüllt sind ein Item gelöscht wird.
+
+Bevor wir uns der Methode widmen ist es wichtig am Anfang des Dokuments folgende Using-Anweisungen zu platzieren, damit wir richtig mit dem JWT umgehen können: <br>
+
+```csharp
+
+using Microsoft.AspNetCore.Authorization;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+
+```
+
+Nun zu der Delete Methode, vor der Überarbeitung sieht diese wie folgt aus:
+
+```csharp
+
+[HttpDelete("{id}")]
+[ProducesResponseType(200)]
+[ProducesResponseType(404)]
+public ActionResult Delete(int id)
+{
+    var news = _context.News.Find(id);
+    if (news == null)
+    {
+        return NotFound(string.Format("News {0} not found", id));
+    }
+
+    _context.News.Remove(news);
+    _context.SaveChanges();
+
+    return Ok();
+}
+
+```
+
+Im ersten Schritt der Überarbeitung fügen wir `[Authorize]` oberhalb von `[HttpDelete("{id}")]`. Dies sorgt dafür, dass die Methode einen Token vom Benutzer verpflichtet und gleichzeit überprüft, ob dieser Token valid ist (Authentifizierung):
+
+```csharp
+
+[Authorize]
+[HttpDelete("{id}")]
+[ProducesResponseType(200)]
+[ProducesResponseType(404)]
+public ActionResult Delete(int id)
+{
+    var news = _context.News.Find(id);
+    if (news == null)
+    {
+        return NotFound(string.Format("News {0} not found", id));
+    }
+
+    _context.News.Remove(news);
+    _context.SaveChanges();
+
+    return Ok();
+}
+
+```
+
+Im zweiten und letzten Schritt bearbeiten wir den Code so, dass der Beitrag nur entfernt wird, wenn der Call vom Benutzer, der den Beitrag erstellt hat, oder einem Admin stammt (Autorisierung). <br>
+
+Um dies tun zu können holen wir uns zunächst die UserId und Rolle aus den Claims des Tokens und speichern diese in Variabeln: <br>
+
+```csharp
+
+int userId = int.Parse(HttpContext.User.FindFirst(JwtRegisteredClaimNames.NameId)?.Value ?? "0");
+string role = HttpContext.User.FindFirstValue(ClaimTypes.Role);
+
+```
+
+Anschliessend bauen wir eine Prüfung ein, wenn die UserId vom Beitrag und Token übereinstimmen oder die Rolle Admin ist, wird der Beitrag aus der Datenbank gelöscht. Werden beide Prüfungen nicht erfüllt gibt die Funktion einen Status-Code `403 Forbidden` zurück:
+
+```csharp
+
+if (news.Id == userId || role == "admin")
+{
+    _context.News.Remove(news);
+    _context.SaveChanges();
+    return Ok();
+}
+else
+{
+    return Forbid();
+}
+
+```
+
+Setzt man alles zusammen sieht die fertige Methode wie folgt aus:
+
+```csharp
+
+[Authorize]
+[HttpDelete("{id}")]
+[ProducesResponseType(200)]
+[ProducesResponseType(403)]
+[ProducesResponseType(404)]
+public ActionResult Delete(int id)
+{
+    var news = _context.News.Find(id);
+    if (news == null)
+    {
+        return NotFound(string.Format("News {0} not found", id));
+    }
+
+    int userId = int.Parse(HttpContext.User.FindFirst(JwtRegisteredClaimNames.NameId)?.Value ?? "0");
+    string role = HttpContext.User.FindFirstValue(ClaimTypes.Role);
+
+    if (news.Id == userId || role == "admin")
+    {
+        _context.News.Remove(news);
+        _context.SaveChanges();
+        return Ok();
+    }
+    else
+    {
+        return Forbid();
+    }
+}
+
+```
+
+Sind Sie allen Schritten gefolgt und alles hat funktioniert, haben Sie nun das Ende der Anleitung erreicht. <br> Herzlichen Glückwunsch, Sie haben nun Authentifizierung und Autorisierung in Ihrer App implementiert
 
 <a id="erreiHz3"></a>
 
 ## Wie wurde das HZ erreicht
 
-asdfasdf
+Um das Artefakt, die Anleitung, erstellen zu können, musste ich zunächst die Authentifizierung und Autorisierung in der Beispielapplikation umsetzten.
 
 <a id="erkläHz3"></a>
 
 ## Erklärung Artefakt
 
-asfdsdf
+Das Artefakt, für dieses Handlungziel, ist eine genaue Schritt für Schritt Anleitung, welche anhand einer Beispielapplikation zeigt, wie man Authentifizierung und Autorisierung umsetzten kann.
 
 <a id="beurtHz3"></a>
 
 ## Beurteilung Erreichungsgrad
 
-asdfasdf
+Das Handlungziel 3 würde ich als vollständig erreicht sehen, ich habe mir mühe gegeben alle Schritte ganz genau zu erklären und somit zu zeigen, dass ich sowohl Authentifizierung als auch Autorisierung umsetzten kann. Es ist wichtig zu beachten, dass ich in der Beispielapplikation nur eine der News-API Methoden überarbeitet habe und auch das Frontend der Applikation nicht auf die Änderungen abgestimmt habe. Aus diesem Grund kann man die erstellten Änderungen nur überprüfen, indem man den Server direkt, z.B. mit Hilfe von Postmann oder einem anderen Tool, anspricht. 
 
 <a id="hz4"></a>
 
@@ -296,25 +746,70 @@ asdfasdf
 
 <a id="artefaktHz4"></a>
 
-## Artefakt | Code vor und nach Implementierung der Massnahme
+## Artefakt | Berücksichtigung von Geheimnisbewahrung während verschiedener Zeitpunkte
+
+<a id="artefaktHz4Entwurf"></a>
+
+### Berücksichtigung während des Entwurfs
+
+Die geplante Beispielapplikation soll ein Open Source Projekt werden und somit in einem öffentlichen Repository auf GitHub abgelegt werden. Durch das, im OWASP Top Ten Bericht, erlangte Wissen habe ich mir aus diesem Grund Gedanken zu Security Misconfiguration gemacht, da bereits geplant wurde, JWT für die Authentifizierung und Autorisierung zu verwenden und ich weiss, dass der verwendete Schlüssel ein Sicherheitsrisiko darstellen kann. Nach genauerem Überlegen bin ich beim Entwurf zum Entschluss gekommen, dass es zwei Lösungen braucht, um den JWT-Key sicher zu bewahren. Einmal für die Implementierung, dass dieser nicht auf dem Repository ersichtlich ist und einmal für die Inbetriebnahme, dass der Key sicher während des Betriebs des Programms abgerufen werden kann. <br>
+
+<a id="artefaktHz4Implementierung"></a>
+
+### Berücksichtigung während der Implementierung
+
+Eine Möglichkeit, den JWT-Key während der Implementierung zu schützen, wäre die Appsettings.json-Datei in eine Gitignore-Datei aufzunehmen, wenn man jedoch mit anderen Entwicklern zusammenarbeitet, müssen diese auch auf die Appsettings.json-Datei zugreifen können. Aus diesem Grund habe ich nach einem neuen Weg gesucht und bin auf Umgebungsvariabeln gestossen. <br>
+
+Für die Implementierung habe ich aus diesem Grund eine Benutzervariabel namens `ASPNETCORE_JWT__Key`, mit dem JWT-Key als Wert, erstellt: <br>
+
+![Benutzervariabel erstellen](images/Setzten_Benutzervariabel.png) <br>
+
+Wie [ein Video von Study Mash](https://www.youtube.com/watch?v=8zcqGaPwDW0)  gut erklärt, kann man nachdem man die Variabel gesetzt hat, in den Appsettings.json den Key einfach löschen, da das Programm automatisch in den Benutzervariabeln suchen wird, wenn es den Schlüssel nicht direkt in den Appsettings.json gefunden wurde. Die Appsettings.json-Datei sieht aus diesem Grund nun wie folgt aus (Beim Teil `Jwt` wurde die Zeile `"Key": hierGeheimerKey` entfernt.): <br>
+
+```csharp
+
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "AllowedHosts": "*",
+  "ConnectionStrings": {
+    "SongContext": "Server=(localdb)\\mssqllocaldb;Database=M183InsecureApp;Trusted_Connection=true;MultipleActiveResultSets=true"
+  },
+  "Jwt": {
+    "Issuer": "https://www.bbbaden.ch/",
+    "Audience": "https://www.bbbaden.ch/",
+  }
+}
+
+```
+
+<a id="artefaktHz4Inbetriebnahme"></a>
+
+### Berücksichtigung während der Inbetriebnahme
+
+Nachdem das Programm fertig implementiert wurde und in die Cloud verschoben wird, muss eine neue Lösung her, da die Umgebungsvariabeln ja nur auf dem Gerät des Entwicklers oder der Entwicklerin gespeichert ist. Ähnlich wie bei den Umgebungsvariabeln, gibt es auch bei den verschiedensten Cloud-Diensten die Möglichkeit kritische Daten wie Keys getrennt vom Code zu speichern. Würde man so beispielsweise das Backend mit dem Azure App Service hosteten könnte man den Azure Key Vault verwenden und dort den JWT-Key speichern.
 
 <a id="erreiHz4"></a>
 
 ## Wie wurde das HZ erreicht
 
-asdfasdf
+Durch die Darstellung meiner Gedanken und Massnahmen zum Umgang mit dem JWT-Key in den verschiedenen Phasen (Entwurf, Implementierung und Inbetriebnahme) habe ich gezeigt, dass ich sicherheitsrelevante Aspekte während allen drei Phasen berücksichtige.
 
 <a id="erkläHz4"></a>
 
 ## Erklärung Artefakt
 
-asfdsdf
+Das Artefakt ist eine Ofenlegung meiner Gedanken und Taten zum Schutz des JWT-Key während den drei Phasen Entwurf, Implementierung und Inbetriebnahme.
 
 <a id="beurtHz4"></a>
 
 ## Beurteilung Erreichungsgrad
 
-asdfasdf
+Ich würde das Handlungziel 4 als vollständig erreicht betrachten, da ich ihn allen drei Phasen Sicherheitsrelevante Aspekte berücksichtigt habe.
 
 <a id="hz5"></a>
 
@@ -342,3 +837,6 @@ asfdsdf
 
 asdfasdf
 
+<a id="selbsteinschätzungModul"></a>
+
+# Selbsteinschätzung Modul
